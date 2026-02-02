@@ -9,31 +9,67 @@ const etherscanApiKey = process.env.ETHERSCAN_API_KEY
 
 // Mapping of view method names to which contract they should point to
 const contractMap = {
-  newRocketDAOProposal: 'RocketDAOProposal',
-  newRocketDAOProtocolProposal: 'RocketDAOProtocolProposal',
-  newRocketDAOProtocolVerifier: 'RocketDAOProtocolVerifier',
-  newRocketDAOProtocolSettingsProposals: 'RocketDAOProtocolSettingsProposals',
-  newRocketDAOProtocolSettingsAuction: 'RocketDAOProtocolAuction',
-  newRocketMinipoolManager: 'RocketMinipoolManager',
-  newRocketNodeStaking: 'RocketNodeStaking',
-  newRocketMinipoolDelegate: 'RocketMinipoolDelegate',
-  newRocketNodeDeposit: 'RocketNodeDeposit',
-  newRocketNetworkVoting: 'RocketNetworkVoting',
-};
+  a: [
+    'RocketMegapoolDelegate',
+    'RocketMegapoolFactory',
+    'RocketMegapoolProxy',
+    'RocketMegapoolManager',
+    'RocketNodeManager',
+    'RocketNodeDeposit',
+    'RocketNodeStaking',
+    'RocketDepositPool',
+    'LinkedListStorage',
+    'RocketDAOProtocol',
+    'RocketDAOProtocolPropsals',
+    'RocketDAOProtocolSettingsNode',
+    'RocketDAOProtocolSettingsDeposit',
+    'RocketDAOProtocolSettingsNetwork',
+    'RocketDAOProtocolSettingsSecurity',
+    'RocketDAOProtocolSettingsMegapool',
+    'RocketDAOProtocolSettingsMinipool',
+  ],
+  b: [
+    'RocketDAOSecurtityUpgrade',
+    'RocketDAOSecurityProposals',
+    'RocketDAONodeTrustedUpgrade',
+    'RocketNetworkRevenues',
+    'RocketNetworkBalances',
+    'RocketNetworkSnapshots',
+    'RocketNetworkPenalties',
+    'RocketRewardsPool',
+    'BeaconStateVerifier',
+    'RocketNodeDistributorDelegate',
+    'RocketClaimDAO',
+    'RocketMinipoolBondReducer',
+    'RocketMinipoolManager',
+    'RocketNetworkVoting',
+    'RocketMerkleDistributorMainnet',
+    'RocketMegapoolPenalties',
+    'RocketNetworkSnapshotsTime',
+    'RocketDAOProtocolSettingsProposal',
+  ]
+}
 
 // Create new ethers provider
 const provider = new ethers.providers.JsonRpcProvider(process.env.ETH_RPC)
 
+const etherscanEndpoint = 'https://api.etherscan.io/v2/api'
+
+const chainIdMap = {
+  'mainnet': '1',
+  'hoodi': '560048',
+}
+
 // Set parameter per network
-let upgradeAddress, etherscanApiUrl
+let upgradeAddress
+let chainId = chainIdMap[process.env.NETWORK]
 switch (process.env.NETWORK) {
-  case 'holesky':
-    upgradeAddress = '0x761C86751255d8eAc9727392DCf3C77831e2A347'
-    etherscanApiUrl = 'https://api-holesky.etherscan.io'
+  case 'hoodi':
+    upgradeAddress = '0x80f43fADa032768130f77F05414496BC37b14a9b'
     break
   case 'mainnet':
-    upgradeAddress = '0xc2C81454427b1E53Fdf5d3B45561e3c18F90f9eD'
-    etherscanApiUrl = 'https://api.etherscan.io'
+    console.error(`Upgrade contract not deployed to mainnet yet ${process.env.NETWORK}`)
+    process.exit(1)
     break
   default:
     console.error(`Invalid network ${process.env.NETWORK}`)
@@ -56,7 +92,7 @@ let lastRequestTime
 
 // Gets verified sources from etherscan (thanks Patches)
 async function getVerifiedSources (address) {
-  const url = `${etherscanApiUrl}/api?module=contract&action=getsourcecode&address=${address}&apikey=${etherscanApiKey}`
+  const url = `${etherscanEndpoint}?chainId=${chainId}&module=contract&action=getsourcecode&address=${address}&apikey=${etherscanApiKey}`
 
   // etherscan api rate limits to 5 calls per second. Wait 0.22 seconds between calls.
   var now = new Date()
@@ -129,40 +165,47 @@ async function verifyTruffleArtifact (contractName, address) {
 
 async function go () {
   // Verify the upgrade contract itself
-  await verifyTruffleArtifact('RocketUpgradeOneDotThreeDotOne', upgradeAddress)
+  await verifyTruffleArtifact('RocketUpgradeOneDotFour', upgradeAddress)
 
   // Construct ABI and contract instance to call all the view methods on upgrade contract
   const upgradeAbi = [
-    'function locked() view returns (bool)',
-    'function corrections(uint256) view returns (address, int256)'
+    'function getRocketStorageAddress() view returns (address)',
+    'function lockedA() view returns (bool)',
+    'function lockedB() view returns (bool)',
+    'function addressesA(uint) view returns (address)',
+    'function addressesB(uint) view returns (address)',
   ]
-  for (const method in contractMap) {
-    upgradeAbi.push(`function ${method}() view returns (address)`)
-  }
   const contract = new ethers.Contract(upgradeAddress, upgradeAbi, provider)
 
-  // Loop over methods, call them and then verify the address they return has correct verified source code
-  for (const method in contractMap) {
-    const address = await contract[method]()
-    await verifyTruffleArtifact(contractMap[method], address)
+  // Verify RocketStorage address
+  const rocketStorageAddress = await contract.getRocketStorageAddress()
+  if (rocketStorageAddress !== process.env.ROCKET_STORAGE) {
+    console.error(`❌ Incorrect RocketStorage address. Expected ${process.env.ROCKET_STORAGE} got ${rocketStorageAddress}`.red)
+    process.exit(1)
+  } else {
+    console.log(`✔ Verified RocketStorage matches ${process.env.ROCKET_STORAGE}`.green)
   }
 
-  // Output eth matched corrections
-  console.log('ETH matched corrections:')
-  let i = 0;
-  while (true) {
-    try {
-      let correction = await contract.corrections(i++);
-      console.log(` ${i}: ${correction[0]} = ${correction[1].toString()}`);
-    } catch(e) {
-      break;
-    }
+  // Loop over addresses A and check verified source
+  for (let i = 0; i < contractMap.a.length; ++i) {
+    const address = await contract.addressesA(i)
+    await verifyTruffleArtifact(contractMap.a[i], address)
   }
 
-  const locked = await contract.locked()
+  // Loop over addresses B and check verified source
+  for (let i = 0; i < contractMap.b.length; ++i) {
+    const address = await contract.addressesB(i)
+    await verifyTruffleArtifact(contractMap.b[i], address)
+  }
 
-  if (!locked) {
-    console.error(`❌ Upgrade contract is not locked`.red)
+  const lockedA = await contract.lockedA()
+  const lockedB = await contract.lockedB()
+
+  if (!lockedA) {
+    console.error(`❌ Upgrade contract is not locked (A)`.red)
+    process.exit(1)
+  } else if (!lockedB) {
+    console.error(`❌ Upgrade contract is not locked (B)`.red)
     process.exit(1)
   } else {
     // If we made it here then it was successful (failures exit early)
