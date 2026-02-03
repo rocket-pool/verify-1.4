@@ -65,7 +65,7 @@ let upgradeAddress
 let chainId = chainIdMap[process.env.NETWORK]
 switch (process.env.NETWORK) {
   case 'hoodi':
-    upgradeAddress = '0x80f43fADa032768130f77F05414496BC37b14a9b'
+    upgradeAddress = '0xe23CBf357be63AD080B363e6E3B15118F4854B99'
     break
   case 'mainnet':
     console.error(`Upgrade contract not deployed to mainnet yet ${process.env.NETWORK}`)
