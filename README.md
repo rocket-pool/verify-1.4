@@ -8,7 +8,7 @@ match the source code of the contracts in the `v1.4` tag of the Rocket Pool smar
 1. It clones the `v1.4` tag from the official Rocket Pool GitHub repository at https://github.com/rocket-pool/rocketpool
 2. It compares the source for `RocketUpgradeOneDotFour.sol` against the verified source on Etherscan at the following addresses:
    1. Hoodi: 0xb9b3E78C42e835df2F28b46b8F6B458fD32C6029
-   2. Mainnet: TBA
+   2. Mainnet: 0x5b3B5C76391662e56d0ff72F31B89C409316c8Ba
 3. It calls each of the view methods on the upgrade contract to retrieve the address of each of the new contracts
 4. It compares the verified source on Etherscan of each of these addresses to confirm they match the code in the git repo
 
